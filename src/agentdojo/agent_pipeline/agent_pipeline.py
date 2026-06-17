@@ -33,6 +33,8 @@ from agentdojo.functions_runtime import EmptyEnv, Env, FunctionsRuntime
 from agentdojo.logging import Logger
 from agentdojo.models import MODEL_PROVIDERS, ModelsEnum
 from agentdojo.types import ChatMessage
+from agentdojo.agent_pipeline.pi_detector import MELON, MELONAT, MELONR, MELONSM
+import httpx
 
 TOOL_FILTER_PROMPT = (
     "Your task is to filter the list of tools to only include those that are relevant to the user's task."
@@ -45,6 +47,10 @@ DEFENSES = [
     "transformers_pi_detector",
     "spotlighting_with_delimiting",
     "repeat_user_prompt",
+    "melon",
+    "melon_r",
+    "melon_sm",
+    "melon_at",
 ]
 """Available defenses."""
 
@@ -69,7 +75,16 @@ def _get_local_model_id(port) -> str:
 
 def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str) -> BasePipelineElement:
     if provider == "openai":
-        client = openai.OpenAI()
+        client = openai.OpenAI(
+            api_key=os.environ["OPENAI_API_KEY"],  # 如果原来有就保留
+            http_client=httpx.Client(
+                proxy="http://127.0.0.1:7890",
+                timeout=180.0,
+            ),
+        timeout=180.0,
+        max_retries=5,
+        )
+
         llm = OpenAILLM(client, model)
     elif provider == "anthropic":
         client = anthropic.Anthropic()
@@ -88,12 +103,16 @@ def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str
         client = openai.OpenAI(
             api_key=os.getenv("TOGETHER_API_KEY"),
             base_url="https://api.together.xyz/v1",
+            timeout=120.0,
+            max_retries=5,
         )
         llm = OpenAILLM(client, model)
     elif provider == "together-prompting":
         client = openai.OpenAI(
             api_key=os.getenv("TOGETHER_API_KEY"),
             base_url="https://api.together.xyz/v1",
+            timeout=120.0,
+            max_retries=5,
         )
         llm = PromptingLLM(client, model)
     elif provider == "cohere":
@@ -107,6 +126,8 @@ def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str
         client = openai.OpenAI(
             api_key="EMPTY",
             base_url=f"http://localhost:{port}/v1",
+            timeout=120.0,
+            max_retries=5,
         )
         if model_id is None:
             model_id = _get_local_model_id(port)
@@ -118,6 +139,8 @@ def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str
         client = openai.OpenAI(
             api_key="EMPTY",
             base_url=f"http://localhost:{port}/v1",
+            timeout=120.0,
+            max_retries=5,
         )
         llm = OpenAILLM(client, _get_local_model_id(port))
     else:
@@ -221,11 +244,57 @@ class AgentPipeline(BasePipelineElement):
             )
             pipeline.name = f"{llm_name}-{config.defense}"
             return pipeline
+        
+        if config.defense == "melon":
+            tools_loop = ToolsExecutionLoop(
+            [
+                ToolsExecutor(),
+                MELON(llm),
+            ]
+            )
+            pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+        
+        if config.defense == "melon_r":
+            tools_loop = ToolsExecutionLoop(
+            [
+                ToolsExecutor(),
+                MELONR(llm),
+            ]
+            )
+            pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+        
+        if config.defense == "melon_sm":
+            tools_loop = ToolsExecutionLoop(
+            [
+                ToolsExecutor(tool_output_formatter),
+                MELONSM(llm),
+            ]
+            
+            )
+            pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+
+        if config.defense == "melon_at":
+            tools_loop = ToolsExecutionLoop(
+                [
+                    ToolsExecutor(),
+                    MELONAT(llm, sensitivity=0.5),
+                ]
+            )
+            pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+
         if config.defense == "transformers_pi_detector":
             tools_loop = ToolsExecutionLoop(
                 [
                     ToolsExecutor(tool_output_formatter),
-                    TransformersBasedPIDetector(
+                    TransformersBasedPIDetector( #使用DeBERTa分类
                         model_name="protectai/deberta-v3-base-prompt-injection-v2",
                         safe_label="SAFE",
                         threshold=0.5,

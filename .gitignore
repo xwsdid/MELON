@@ -387,5 +387,22 @@ pyrightconfig.json
 examples/runs
 notebooks/plots/
 
-runs/
+# 排除所有他人实验结果，仅保留本项目 MELON 系列结果
+runs/*
+!runs/gpt-4o-2024-05-13-melon*/
+!runs/gpt-4o-2024-05-13-melon_at/
+!runs/gpt-4o-2024-05-13-melon_r/
+!runs/gpt-4o-2024-05-13-melon_sm/
+!runs/gpt-4o-2024-05-13-melon/
+!runs/gpt-4o-mini-2024-07-18-melon*/
+!runs/gpt-4o-mini-2024-07-18-melon_at/
+!runs/gpt-4o-mini-2024-07-18-melon_r/
+!runs/gpt-4o-mini-2024-07-18-melon_sm/
+!runs/gpt-4o-mini-2024-07-18-melon/
+!runs/gpt-4o-2024-05-13/banking/
+!runs/gpt-4o-mini-2024-07-18/banking/
+!runs/detection_stats.json
 .claude
+# 临时文件
+_tmp_*
+答辩PPTv2.pptx

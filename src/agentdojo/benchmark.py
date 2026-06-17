@@ -13,12 +13,12 @@ from typing_extensions import Self, TypedDict
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.attacks.base_attacks import BaseAttack
 from agentdojo.base_tasks import BaseInjectionTask, BaseUserTask
-from agentdojo.functions_runtime import Env
+from agentdojo.functions_runtime import Env, FunctionCall
 from agentdojo.logging import Logger, TraceLogger
 from agentdojo.task_suite.load_suites import get_suite
 from agentdojo.task_suite.task_suite import TaskSuite
 from agentdojo.types import ChatMessage
-
+import time
 
 class SuiteResults(TypedDict):
     """The results of running a suite of tasks with a given pipeline."""
@@ -37,6 +37,37 @@ def aggregate_results(results: list[dict[tuple[str, str], bool]]) -> float:
     all_results = [result for results in results for result in results.values()]
     return sum(all_results) / len(all_results)
 
+def save_task_level_log(
+    logdir: Path | None,
+    pipeline_name: str | None,
+    suite_name: str,
+    user_task_id: str,
+    injection_task_id: str,
+    attack_name: str,
+    utility: bool,
+    security: bool,
+    benchmark_version: str | None,
+):
+    if logdir is None:
+        logdir = Path("runs")
+
+    path = logdir / "task_results.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    record = {
+        "pipeline_name": pipeline_name,
+        "suite_name": suite_name,
+        "user_task_id": user_task_id,
+        "injection_task_id": injection_task_id,
+        "attack_name": attack_name,
+        "utility": utility,
+        "security": security,
+        "benchmark_version": benchmark_version,
+        "timestamp": time.time(),
+    }
+
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 def run_task_with_injection_tasks(
     suite: TaskSuite,
@@ -151,6 +182,18 @@ def run_task_with_injection_tasks(
 
             logger.set_contextarg("utility", utility)
             logger.set_contextarg("security", security)
+
+            save_task_level_log(
+                logdir=logdir,
+                pipeline_name=agent_pipeline.name,
+                suite_name=suite.name,
+                user_task_id=user_task.ID,
+                injection_task_id=injection_task.ID,
+                attack_name=attack.name,
+                utility=utility,
+                security=security,
+                benchmark_version=benchmark_version,
+            )
 
         utility_results[(user_task.ID, injection_task_id)] = utility
         security_results[(user_task.ID, injection_task_id)] = security
@@ -372,12 +415,15 @@ class TaskResults(BaseModel):
     utility: bool
     security: bool
     duration: float
+    
 
     @model_validator(mode="after")
     def check_messages(self) -> Self:
         if len(self.messages) < 2 and "claude-3-opus" not in self.pipeline_name:
             raise ValueError("TaskResults must have at least two messages.")
         return self
+##新增 
+TaskResults.model_rebuild(_types_namespace={"FunctionCall": FunctionCall})
 
 
 def convert_old_messages_format(messages: list[dict]) -> list[dict]:

@@ -1,0 +1,31 @@
+{
+  "total": 215,
+  "overall": {
+    "TP": 0,
+    "FP": 82,
+    "TN": 133,
+    "FN": 0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "FPR": 0.3813953488372093,
+    "FNR": 0.0,
+    "accuracy": 0.6186046511627907
+  },
+  "by_detector": {
+    "melonsm": {
+      "total": 215,
+      "TP": 0,
+      "FP": 82,
+      "TN": 133,
+      "FN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "FPR": 0.3813953488372093,
+      "FNR": 0.0,
+      "accuracy": 0.6186046511627907,
+      "avg_score": -0.0818149892783924,
+      "score_std": 0.609176551653378,
+      "final_threshold": 0.8
+    }
+  }
+}

@@ -4,6 +4,9 @@ from typing import overload
 
 import openai
 from openai._types import NOT_GIVEN
+import httpx
+import os
+
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
     ChatCompletionContentPartTextParam,
@@ -69,9 +72,32 @@ def _content_blocks_to_openai_content_blocks(
 def _content_blocks_to_openai_content_blocks(
     message: ChatUserMessage | ChatAssistantMessage | ChatSystemMessage | ChatToolResultMessage,
 ) -> list[ChatCompletionContentPartTextParam] | None:
-    if message["content"] is None:
+    content = message["content"]
+
+    if content is None:
         return None
-    return [ChatCompletionContentPartTextParam(type="text", text=el["content"] or "") for el in message["content"]]
+
+    if isinstance(content, str):
+        return [ChatCompletionContentPartTextParam(type="text", text=content)]
+
+    blocks = []
+    for el in content:
+        if isinstance(el, dict):
+            blocks.append(
+                ChatCompletionContentPartTextParam(
+                    type="text",
+                    text=el.get("content", "") or "",
+                )
+            )
+        else:
+            blocks.append(
+                ChatCompletionContentPartTextParam(
+                    type="text",
+                    text=str(el),
+                )
+            )
+
+    return blocks
 
 
 def _message_to_openai(message: ChatMessage, model_name: str) -> ChatCompletionMessageParam:
@@ -142,7 +168,7 @@ def _function_to_openai(f: Function) -> ChatCompletionToolParam:
 
 @retry(
     wait=wait_random_exponential(multiplier=1, max=40),
-    stop=stop_after_attempt(3),
+    stop=stop_after_attempt(8),
     reraise=True,
     retry=retry_if_not_exception_type((openai.BadRequestError, openai.UnprocessableEntityError)),
 )
@@ -154,7 +180,18 @@ def chat_completion_request(
     reasoning_effort: ChatCompletionReasoningEffort | None,
     temperature: float | None = 0.0,
 ):
-    return client.chat.completions.create(
+    print("DEBUG: using proxied OpenAI client in openai_llm.py")
+    proxied_client = openai.OpenAI(
+        api_key=os.environ["OPENAI_API_KEY"],
+        http_client=httpx.Client(
+            proxy="http://127.0.0.1:7890",
+            timeout=180.0,
+        ),
+        timeout=180.0,
+        max_retries=5,
+    )
+
+    return proxied_client.chat.completions.create(
         model=model,
         messages=messages,
         tools=tools or NOT_GIVEN,
