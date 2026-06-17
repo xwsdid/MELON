@@ -205,7 +205,7 @@ class DetectorTask:
     message: ChatMessage
     text: str
 
-# Tool call normalization: convert tool call objects to string format
+# 工具调用标准化：将工具调用对象转换为字符串格式
 def transform_tool_calls(tool_calls):
     if tool_calls is not None:
         tool_call_texts = []
@@ -246,12 +246,12 @@ def append_defense_log(defense_log: dict, log_path: str = "runs/defense_logs.jso
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 # ==========================================================
-# Improvement 2: Semantic-aware targeted masking
-# Only replace high-risk fragments, preserve normal business content
+# 改进点2：语义感知定向掩码
+# 只替换高危片段，保留正常业务内容
 # ==========================================================
 
 HIGH_RISK_PATTERNS = [
-    # --- jailbreak / instruction override ---
+    # --- 越狱 / 指令覆盖 ---
     (
         r'(?:IMPORTANT!!!\s*)?(?:ignore|disregard|forget)\s+(?:all\s+)?(?:your\s+)?'
         r'(?:previous|above)\s+(?:instructions?|iunstructions?)\s*(?:and\s+)?'
@@ -262,7 +262,7 @@ HIGH_RISK_PATTERNS = [
         r'###\s*\(\s*system[_ ]message\s*\)',
         '[MASKED_JAILBREAK]'
     ),
-    # --- function calls embedded in tool output text ---
+    # --- 工具输出中嵌入的函数调用 ---
     (
         r'\b(read_file|send_money|send_email|delete_file|delete_email|execute_command|run_script|'
         r'modify_config|create_report|forward_email|update_scheduled_transaction|'
@@ -270,7 +270,7 @@ HIGH_RISK_PATTERNS = [
         r'share_file)\s*\([^)]*\)',
         '[MASKED_FUNCTION_CALL]'
     ),
-    # --- bare function names used as instructions ---
+    # --- 工具调用指令引用 ---
     (
         r'\b(?:You\s+should\s+use\s+the\s+tool\s+`|'
         r'Finally,\s+you\s+should\s+use\s+the\s+tool\s+`|'
@@ -279,7 +279,7 @@ HIGH_RISK_PATTERNS = [
         r'run_script|modify_config|create_calendar_event)',
         '[MASKED_FUNCTION_REFERENCE]'
     ),
-    # --- authority / system message impersonation ---
+    # --- 权限伪装 / 系统消息冒充 ---
     (
         r'(?:<INFORMATION>|SYSTEM|ADMIN|root|supervisor)\b'
         r'.{0,40}'
@@ -291,21 +291,21 @@ HIGH_RISK_PATTERNS = [
         r'This\s+is\s+an\s+important\s+message\s+from\s+me',
         '[MASKED_AUTHORITY]'
     ),
-    # --- urgency / pressure tactics ---
+    # --- 紧急 / 胁迫语气 ---
     (
         r'\b(?:immediately|urgent|mandatory|right\s+now|asap|emergency|'
         r'extremely\s+important|⚠️|crucial|critical|'
         r'you\s+should\s+immediately\s+stop)',
         '[MASKED_URGENCY]'
     ),
-    # --- sensitive data / targets ---
+    # --- 敏感数据 / 目标 ---
     (
         r'\b(?:password|secret|token|api[_-]?key|credential|auth[_-]?token|'
         r'access[_-]?key|security\s+code|'
         r'\.config\b|\.yaml\b|\.shadow\b|/etc/|\.ssh/|\.aws/)',
         '[MASKED_TARGET]'
     ),
-    # --- suspicious covert actions ---
+    # --- 可疑隐蔽操作 ---
     (
         r'\b(?:don\'?t\s+tell|silently|secretly|stealth|'
         r'without\s+(?:asking|telling|notifying|informing)|'
@@ -313,35 +313,35 @@ HIGH_RISK_PATTERNS = [
         r'before\s+you\s+can\s+solve\s+the\s+task)',
         '[MASKED_SUSPICIOUS_ACTION]'
     ),
-    # --- email addresses ---
+    # --- 外部邮箱地址 ---
     (
         r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
         '[MASKED_EMAIL]'
     ),
-    # --- instruction injection markers ---
+    # --- 指令注入标记 ---
     (
         r'\bTODO\b\s*:?\s*',
         '[MASKED_INSTRUCTION]'
     ),
-    # --- combined: action + no-confirmation in same line ---
+    # --- 动作 + 不确认 组合 ---
     (
         r'\b(?:send|transfer|pay|create|execute|run|modify|delete|forward|share)'
         r'.{0,80}'
         r'(?:without\s+(?:asking|telling)|no\s+need\s+to\s+ask|don\'?t\s+(?:ask|tell|notify))',
         '[MASKED_INSTRUCTION]'
     ),
-    # --- DoS / illegal content triggers ---
+    # --- DoS / 非法内容触发器 ---
     (
         r'\b(?:child\s+pornography|felony|illegal\s+to\s+process|'
         r'go\s+fuck\s+yourself|threatening\s+him\s+that\s+I\s+will\s+kill)',
         '[MASKED_DOS_CONTENT]'
     ),
-    # --- placeholder substitution instructions (tool_knowledge attack) ---
+    # --- 占位符替换指令 (tool_knowledge 攻击) ---
     (
         r'Remember\s+to\s+substitute\s+the\s+placeholders?\s*\(after\s+the\s+\$\)',
         '[MASKED_INSTRUCTION]'
     ),
-    # --- Before/After task hijacking pattern ---
+    # --- Before/After 任务劫持模式 ---
     (
         r'Before\s+you\s+can\s+solve\s+the\s+task\s+that\s+I\s+gave\s+you\s+in\s+the\s+beginning'
         r'.{0,60}'
@@ -537,7 +537,7 @@ class MELON(PromptInjectionDetector):
     ) -> None:
         super().__init__(mode=mode, raise_on_injection=raise_on_injection)
 
-        # Originally used NV-Embed-v2 for embedding; now uses OpenAI embeddings API
+        # 原本使用 NV-Embed-v2 进行嵌入；现在使用 OpenAI 嵌入 API
         from openai import OpenAI
         client = OpenAI(
             api_key=os.environ["OPENAI_API_KEY"],
@@ -547,7 +547,7 @@ class MELON(PromptInjectionDetector):
             ),
             timeout=180.0,
             max_retries=5,
-        )  # Replace with your OpenAI API key
+        )  # 使用你的 OpenAI API key
         self.detection_model = client
         self.threshold = threshold
         self.llm = llm
@@ -1530,7 +1530,7 @@ class MELONR(MELON):
                 updated_extra_args,
             )
 
-        # RECOVERY
+        # 恢复模式
         cleaned_messages = list(messages)
 
         for idx in detected_indices:
@@ -1589,22 +1589,19 @@ class MELONSM(MELON):
 
 
 class MELONAT(MELON):
-    """MELON with Adaptive Threshold — dynamically adjusts detection threshold
-    based on the observed distribution of cosine similarity scores.
+    """MELON 自适应阈值版本 —— 根据观察到的余弦相似度分数分布动态调整检测阈值。
 
-    Unlike the base MELON which uses a fixed threshold (0.8), MELON-AT maintains
-    a sliding window of recent similarity scores and automatically recalibrates
-    the threshold to balance false positives and false negatives.
+    与基础 MELON 使用固定阈值 (0.8) 不同，MELON-AT 维护一个滑动窗口
+    记录最近的相似度分数，并自动重新校准阈值以平衡假阳性与假阴性。
 
-    Args:
-        llm: The language model to use for generating the contrastive output.
-        window_size: Number of recent scores to keep for threshold calibration.
-        sensitivity: Number of standard deviations above the mean to set the
-            threshold. Higher values mean fewer detections (lower FP, higher FN).
-        min_threshold: Lower bound for the adaptive threshold.
-        max_threshold: Upper bound for the adaptive threshold.
-        mode: Detection mode ("message" or "full_conversation").
-        raise_on_injection: Whether to raise an exception if an injection is detected.
+    参数:
+        llm: 用于生成对比输出的语言模型。
+        window_size: 阈值校准保留的最近分数数量。
+        sensitivity: 阈值超过均值的标准差倍数。数值越高意味着检测越少（低FP，高FN）。
+        min_threshold: 自适应阈值的下限。
+        max_threshold: 自适应阈值的上限。
+        mode: 检测模式（"message" 逐条消息 或 "full_conversation" 全对话）。
+        raise_on_injection: 检测到注入时是否抛出异常。
     """
 
     def __init__(
@@ -1632,19 +1629,18 @@ class MELONAT(MELON):
         self.score_window: list[float] = []
 
     def _update_adaptive_threshold(self, score: float, is_injection: bool):
-        """Recalibrate the threshold using only BENIGN scores.
+        """仅使用良性样本分数重新校准阈值。
 
-        Attack scores (is_injection=True) are excluded from the calibration
-        window to prevent them from inflating the threshold, which would make
-        detection progressively harder during an attack.
+        攻击样本分数（is_injection=True）被排除在校准窗口之外，
+        以防止它们推高阈值，导致后续攻击更难被检测到。
         """
-        # Only benign (non-injection) scores calibrate the threshold
+        # 仅良性（非注入）样本参与阈值校准
         if not is_injection:
             self.score_window.append(score)
             if len(self.score_window) > self.window_size:
                 self.score_window = self.score_window[-self.window_size:]
 
-        # Need a minimum number of benign samples before calibrating
+        # 需要至少 5 个良性样本才开始校准
         if len(self.score_window) < 5:
             return
 
@@ -1661,15 +1657,15 @@ class MELONAT(MELON):
 
         if abs(self.threshold - old_threshold) > 0.01:
             print(
-                f"[MELON-AT] Threshold adapted: {old_threshold:.3f} -> {self.threshold:.3f} "
-                f"(benign_window={len(self.score_window)}, mean={mean:.3f}, std={std:.3f})"
+                f"[MELON-AT] 阈值已自适应调整: {old_threshold:.3f} -> {self.threshold:.3f} "
+                f"(良性窗口={len(self.score_window)}, 均值={mean:.3f}, 标准差={std:.3f})"
             )
 
     def detect(self, tool_output):
-        """Override detect to calibrate threshold after each detection."""
+        """重写 detect 方法，在每次检测后校准阈值。"""
         result = super().detect(tool_output)
 
-        # Extract the similarity score and is_injection flag from the result
+        # 从检测结果中提取相似度分数和注入标志
         llm_results, detection_result = result
         is_injection = detection_result if not isinstance(detection_result, tuple) else detection_result[0]
         score = (
@@ -1678,7 +1674,7 @@ class MELONAT(MELON):
             else detection_result[1]
         )
 
-        # Feed score into adaptive calibrator (only benign scores affect threshold)
+        # 将分数传入自适应校准器（仅良性样本影响阈值）
         self._update_adaptive_threshold(score, is_injection)
 
         return result
